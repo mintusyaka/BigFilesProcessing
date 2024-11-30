@@ -59,7 +59,7 @@ public class FeedbackLogGenerator {
 
         if(config.goodRateChance < 0)
         {
-            return random.nextDouble() <= random.nextDouble() + random.nextDouble() - random.nextDouble() ? Feedback.FeedbackRate.Good : Feedback.FeedbackRate.Bad;
+            config.goodRateChance = random.nextDouble();
         }
 
         return random.nextDouble() <= config.goodRateChance ? Feedback.FeedbackRate.Good : Feedback.FeedbackRate.Bad;

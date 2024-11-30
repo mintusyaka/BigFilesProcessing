@@ -10,7 +10,7 @@ import java.time.LocalDate;
 
 public class FeedbackGeneratorApp {
     public static void main(String[] args) {
-        String filename = "log_test_2.txt";
+        String filename = "log_test_4.txt";
 
         FeedbackLogGenerator generator = new FeedbackLogGenerator(new FeedbackLogGeneratorRandConfig());
 

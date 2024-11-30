@@ -25,10 +25,19 @@ public class BigFilesProcessing {
     private JTextField maxSimmulatedThreadsCountInput;
     private JLabel currentMaxSimulatedThreadsCount;
     private JTable threadsTable;
+    private JLabel totalProcessedFeedbacksCountLabel;
+    private JLabel genderLabel;
+    private JLabel mostFrequentlyUsedWordLabel;
+    private JLabel goodPercentageLabel;
+    private JLabel badPercentageLabel;
 
     private final int MAX_THREADS = 12;
 
+    private FeedbackLogProcessingResult finalResult;
+
     public BigFilesProcessing() {
+
+
 
         addLogFileButton.addActionListener(new ActionListener() {
             @Override
@@ -78,7 +87,14 @@ public class BigFilesProcessing {
                 model.addRow(row);
 
                 row = new Vector<>();
-                row.add("log_test_2024-11-30.txt");
+                row.add("log_test_3.txt");
+                row.add("Not processed");
+                row.add(Integer.toString(logsProcessingProgressTable.getRowCount()));
+                model.addRow(row);
+
+
+                row = new Vector<>();
+                row.add("log_test_4.txt");
                 row.add("Not processed");
                 row.add(Integer.toString(logsProcessingProgressTable.getRowCount()));
                 model.addRow(row);
@@ -91,6 +107,9 @@ public class BigFilesProcessing {
             @Override
             public void actionPerformed(ActionEvent e) {
                 fillThreadsTableHeader();
+
+                clearThreadTable();
+
                 int numberOfThreads = 0;
                 int numberOfSimulatedThreads = 0;
                 try {
@@ -101,22 +120,15 @@ public class BigFilesProcessing {
                 }
 
                 ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(numberOfThreads);
-
                 Semaphore semaphore = new Semaphore(numberOfSimulatedThreads);
                 Semaphore mutex = new Semaphore(1);
-
                 ConcurrentLinkedQueue<String> queue = createLogQueue();
                 int fileCount = queue.size();
-
                 List<FeedbackLogProcessingResult> results = new ArrayList<>();
-                List<FeedbackLogProcessingResult> resultsInFutures = new ArrayList<>();
-
-                List<ScheduledFuture<FeedbackLogProcessingResult>> futures = new ArrayList<>();
-
-
 
                 Callable<FeedbackLogProcessingResult> analyzeFilesTask = () -> {
                     try {
+                        long startTime = System.currentTimeMillis();
                         semaphore.acquire();
                         FeedbackLogProcessingResult result = new FeedbackLogProcessingResult();
                         result.setThread(Thread.currentThread());
@@ -128,7 +140,7 @@ public class BigFilesProcessing {
 
                             mutex.release();
                             return result;
-                            }
+                        }
                         else {
                             try {
                                 // Thread status to preparing to proceed
@@ -152,180 +164,93 @@ public class BigFilesProcessing {
                                 semaphore.release();
                             }
                         }
+
+                        if(result.getFeedbacksCount() != 0)
+                        {
+                            result.setStatus("Proceeded");
+                            long endTime = System.currentTimeMillis();
+                            result.setExecutionTime(endTime - startTime);
+                            results.add(result);
+                        }
                         return result;
                     } catch (InterruptedException ex) {
                         throw new RuntimeException(ex);
                     }
                 };
 
-                for(int i = 0; i < numberOfThreads; ++i)
-                {
+                List<SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult>> workers = new ArrayList<>();
+
+                for (int i = 0; i < fileCount; ++i) {
+                    workers.add(new DataAnalyzeThread(semaphore, mutex, queue, results));
+                    scheduler.schedule(workers.get(i), 10, TimeUnit.MILLISECONDS);
+                }
+
+                new SwingWorkersDataGetterThread(workers, results).start();
+
+/*
+                List<ScheduledFuture<FeedbackLogProcessingResult>> futures = new ArrayList<>();
+
+                for (int i = 0; i < fileCount; ++i) {
                     futures.add(scheduler.schedule(analyzeFilesTask, 10, TimeUnit.MILLISECONDS));
-                    resultsInFutures.add(null);
                 }
 
-                //listener on new results in array of ScheduledFuture
-                /*while(true)
-                {
-                    int index = isAnyFutureGetResult(futures);
-                    if(index != -1)
-                    {
-                        try {
-                            FeedbackLogProcessingResult result = futures.get(index).get();
+                finalResult = new FeedbackLogProcessingResult();
 
-                            results.add(futures.get(index).get());
-                            futures.set(index, scheduler.schedule(analyzeFilesTask, 10, TimeUnit.MILLISECONDS));
+                long totalTime = 0;
+                long startTime = System.currentTimeMillis();
 
-                        } catch (InterruptedException | ExecutionException ex) {
-                            throw new RuntimeException(ex);
-                        }
+                int goodPercentage = 0;
+                int badPercentage = 0;
+
+                for (ScheduledFuture<FeedbackLogProcessingResult> future : futures) {
+                    try {
+                        FeedbackLogProcessingResult result = future.get();
+                        updateThreadTable(result.getThread(), result.getStatus(), result.getLogName(), result.getExecutionTime() + " ms");
+
+                        finalResult.setFeedbacksCount(finalResult.getFeedbacksCount() + result.getFeedbacksCount());
+                        finalResult.setExecutionTime(finalResult.getExecutionTime() + result.getExecutionTime());
+                        goodPercentage += result.getPercentageOfGoodFeedbacks();
+                        badPercentage += result.getPercentageOfBadFeedbacks();
+                        finalResult.setMostFrequentlyUsedWord(result.getMostFrequentlyUsedWord());
+                        finalResult.setMoreFeedbacksReceivedFrom(result.getMoreFeedbacksReceivedFrom());
+
+                        totalTime += result.getExecutionTime();
+                        System.out.println("=========");
+                        System.out.println(result);
+                        System.out.println("=========");
+
+                    } catch (InterruptedException | ExecutionException ex) {
+                        throw new RuntimeException(ex);
                     }
-                    if(results.contains(null))
-                        break;
-                }*/
-
-                /*SwingWorker<FeedbackLogProcessingResult, Void> worker = new SwingWorker<>() {
-                    @Override
-                    protected FeedbackLogProcessingResult doInBackground() throws Exception {
-                        // Wait for the result of the scheduled task (this is blocking until completion)
-                        for(int i = 0; i < futures.size(); ++i) {
-                            if(futures.get(i).isDone()) {
-                                return futures.get(i).get();
-                            }
-                        }
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            // Get the result from the background task and update the UI
-                            FeedbackLogProcessingResult result = get();
-                            updateThreadTable(result.getThread(), result.getThread().getState().toString(), result.getLogName());
-                        } catch (InterruptedException | ExecutionException e) {
-                            e.printStackTrace();
-                        } finally {
-                            if(results.size() == fileCount) {
-                                System.out.println("All files processed!");
-
-                                System.out.println("Scheduler shot down STARTED!");
-                                scheduler.shutdownNow();
-                                System.out.println("Scheduler shot down FINISHED!");
-                                System.out.println("==========================");
-                            }
-                            else {
-                                System.out.println("Some files are not processed!");
-                            }
-                        }
-                    }
-                };*/
-
-                boolean isProceed = true;
-
-                while(isProceed) {
-                    isProceed = false;
-                    for(int i = 0; i < numberOfThreads; ++i) {
-                        if(futures.get(i).isDone())
-                        {
-
-                            try {
-                                FeedbackLogProcessingResult result = futures.get(i).get();
-                                if(result != null) {
-                                    if(result.getFeedbacksCount() != 0) {
-                                        isProceed = true;
-                                        results.add(result);
-                                        futures.remove(i);
-                                        futures.add(scheduler.schedule(analyzeFilesTask, 10, TimeUnit.MILLISECONDS));
-                                        updateThreadTable(result.getThread(), result.getThread().getState().toString(), result.getLogName());
-                                    }
-                                    else {
-                                        updateThreadTable(result.getThread(), result.getThread().getState().toString(), result.getLogName());
-                                    }
-                                }
-                            } catch (InterruptedException | ExecutionException ex) {
-                                throw new RuntimeException(ex);
-                            }
-                        }
-                        else {
-                            isProceed = true;
-                        }
-                        if(results.size() == fileCount) {
-                            isProceed = false;
-                            break;
-                        }
-                    }
-/*
-                    System.out.println("=========");
-                    for(int i = 0; i < results.size(); ++i)
-                    {
-                        System.out.println(results.get(i));
-                    }
-                    System.out.println("-----------");
-                    System.out.println(queue.size());
-                    System.out.println("=========");*/
-
                 }
 
+                long endTime = System.currentTimeMillis();
+                finalResult.setExecutionTime(endTime - startTime);
 
-                /*while(!queue.isEmpty())
-                {
-                    int index = isAnyFutureGetResult(futures);
-                    if(index != -1)
-                    {
-                        try {
-                            FeedbackLogProcessingResult result = futures.get(index).get();
 
-                            results.add(futures.get(index).get());
-                            futures.set(index, scheduler.schedule(analyzeFilesTask, 10, TimeUnit.MILLISECONDS));
+                finalResult.setPercentageOfGoodFeedbacks((int)(goodPercentage * 1.0 / futures.size()));
+                finalResult.setPercentageOfBadFeedbacks((int)(badPercentage * 1.0 / futures.size()));
 
-                        } catch (InterruptedException | ExecutionException ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    }
-                }*/
+                totalProcessedFeedbacksCountLabel.setText(finalResult.getFeedbacksCount() + "");
+                genderLabel.setText(finalResult.getMostFrequentlyUsedWord());
+                mostFrequentlyUsedWordLabel.setText(finalResult.getMostFrequentlyUsedWord());
+                goodPercentageLabel.setText(finalResult.getPercentageOfGoodFeedbacks() + "%");
+                badPercentageLabel.setText(finalResult.getPercentageOfBadFeedbacks() + "%");
 
-/*
-
-                try {
-                    if(scheduler.awaitTermination(10, TimeUnit.SECONDS))
-                        System.out.println("\nTermination done\n");
-                    else
-                        scheduler.shutdownNow();
-                } catch (InterruptedException ex) {
-                    throw new RuntimeException(ex);
-                }
-*/
-                System.out.println("Scheduler shot down STARTED!");
-
-                try {
-                    if(scheduler.awaitTermination(10, TimeUnit.SECONDS))
-                    {
-                        System.out.println("\nTermination done\n");
-                    }
-                    else {
-                        scheduler.shutdownNow();
-                        System.out.println("\nTermination failed\n");
-                    }
-                } catch (InterruptedException ex) {
-                    throw new RuntimeException(ex);
-                }
-
-                System.out.println("Scheduler shot down FINISHED!");
 
                 for(int i = 0; i < results.size(); ++i)
                 {
-                    System.out.println(results.get(i));
+                    System.out.println(i + ". " + results.get(i));
                 }
+                System.out.println("Total execution time: " + totalTime + " ms");
+                System.out.println("Execution time: " + (endTime - startTime) + " ms");
+*/
 
-                /*for(int i = 0; i < futures.size(); ++i)
-                {
-                    try {
-                        System.out.println(futures.get(i).get());
-                    } catch (InterruptedException | ExecutionException ex) {
-                        ex.printStackTrace();
-                        throw new RuntimeException(ex);
-                    }
-                }*/
+            }
+
+            private void clearThreadTable() {
+                DefaultTableModel model = (DefaultTableModel) threadsTable.getModel();
+                model.setRowCount(0);
             }
         });
 
@@ -389,10 +314,207 @@ public class BigFilesProcessing {
     {
         DefaultTableModel model = (DefaultTableModel) threadsTable.getModel();
 
-        model.setColumnIdentifiers(new String[] { "Thread ID", "Status", "File"});
+        model.setColumnIdentifiers(new String[] { "Thread ID", "Status", "File", "Execution Time"});
     }
 
-    private void updateThreadTable(Thread thread, String status, String logName)
+    private int isAnyFutureGetResult(List<ScheduledFuture<FeedbackLogProcessingResult>> futures)
+    {
+        for (int i = 0; i < futures.size(); i++) {
+            ScheduledFuture<FeedbackLogProcessingResult> future = futures.get(i);
+            if (future.isDone()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public class FuturesDataGetterThread extends Thread {
+        List<ScheduledFuture<FeedbackLogProcessingResult>> futures;
+        List<FeedbackLogProcessingResult> results;
+
+        FeedbackLogProcessingResult finalResult;
+
+        public FuturesDataGetterThread(List<ScheduledFuture<FeedbackLogProcessingResult>> futures,
+                                            List<FeedbackLogProcessingResult> results,
+                                            FeedbackLogProcessingResult finalResult) {
+            this.futures = futures;
+            this.results = results;
+            this.finalResult = finalResult;
+        }
+
+        @Override
+        public void run() {
+            long totalTime = 0;
+
+            int goodPercentage = 0;
+            int badPercentage = 0;
+
+            for (ScheduledFuture<FeedbackLogProcessingResult> future : futures) {
+                try {
+                    FeedbackLogProcessingResult result = future.get();
+                    finalResult.setFeedbacksCount(finalResult.getFeedbacksCount() + result.getFeedbacksCount());
+                    finalResult.setExecutionTime(finalResult.getExecutionTime() + result.getExecutionTime());
+                    goodPercentage += result.getPercentageOfGoodFeedbacks();
+                    badPercentage += result.getPercentageOfBadFeedbacks();
+                    finalResult.setMostFrequentlyUsedWord(result.getMostFrequentlyUsedWord());
+                    finalResult.setMoreFeedbacksReceivedFrom(result.getMoreFeedbacksReceivedFrom());
+
+                    totalTime += result.getExecutionTime();
+                    System.out.println("=========");
+                    System.out.println(result);
+                    System.out.println("=========");
+
+                } catch (InterruptedException | ExecutionException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+
+            finalResult.setPercentageOfGoodFeedbacks((int)(goodPercentage * 1.0 / futures.size()));
+            finalResult.setPercentageOfBadFeedbacks((int)(badPercentage * 1.0 / futures.size()));
+
+            for(int i = 0; i < results.size(); ++i)
+            {
+                System.out.println(i + ". " + results.get(i));
+            }
+            System.out.println("Total execution time: " + totalTime);
+
+            System.out.println(finalResult.getFeedbacksCount() + " feedbacks received");
+            System.out.println(finalResult.getMoreFeedbacksReceivedFrom());
+            System.out.println(finalResult.getMostFrequentlyUsedWord());
+            System.out.println(finalResult.getPercentageOfGoodFeedbacks());
+            System.out.println(finalResult.getPercentageOfBadFeedbacks());
+        }
+    }
+
+    public class SwingWorkersDataGetterThread extends Thread {
+        List<SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult>> workers;
+        List<FeedbackLogProcessingResult> results;
+
+        public SwingWorkersDataGetterThread(List<SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult>> workers,
+                                            List<FeedbackLogProcessingResult> results) {
+            this.workers = workers;
+            this.results = results;
+        }
+
+
+        @Override
+        public void run() {
+            long totalTime = 0;
+
+            for (SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult> worker : workers) {
+                try {
+                    FeedbackLogProcessingResult result = worker.get();
+                    totalTime += result.getExecutionTime();
+                    System.out.println("=========");
+                    System.out.println(result);
+                    System.out.println("=========");
+
+                } catch (InterruptedException | ExecutionException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+
+            for(int i = 0; i < results.size(); ++i)
+            {
+                System.out.println(i + ". " + results.get(i));
+            }
+            System.out.println("Total execution time: " + totalTime);
+
+        }
+    }
+
+    public class DataAnalyzeThread extends SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult> {
+        Semaphore semaphore;
+        Semaphore mutex;
+        ConcurrentLinkedQueue<String> queue;
+        List<FeedbackLogProcessingResult> results;
+
+        long startTime;
+        long endTime;
+
+        public DataAnalyzeThread(Semaphore semaphore, Semaphore mutex, ConcurrentLinkedQueue<String> queue, List<FeedbackLogProcessingResult> results) {
+            this.semaphore = semaphore;
+            this.mutex = mutex;
+            this.queue = queue;
+            this.results = results;
+        }
+
+        @Override
+        protected void process(List<FeedbackLogProcessingResult> chunks) {
+            FeedbackLogProcessingResult result = chunks.get(chunks.size() - 1);
+            updateThreadTable(result.getThread(), result.getStatus(), result.getLogName(), "-");
+        }
+
+        @Override
+        protected void done() {
+            try {
+                FeedbackLogProcessingResult result = get();
+                updateThreadTable(result.getThread(), result.getStatus(), result.getLogName(), result.getExecutionTime() + " ms");
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        protected FeedbackLogProcessingResult doInBackground() throws Exception {
+            try {
+                startTime = System.currentTimeMillis();
+                semaphore.acquire();
+                FeedbackLogProcessingResult result = new FeedbackLogProcessingResult();
+                result.setThread(Thread.currentThread());
+                result.setLogName("-");
+                result.setStatus( "Not processed");
+
+                publish(result);
+
+                mutex.acquire();
+                if(queue.isEmpty()) {
+
+                    mutex.release();
+                    return result;
+                }
+                else {
+                    try {
+                        // Thread status to preparing to proceed
+                        String logName = queue.poll();
+                        result.setLogName(logName);
+                        result.setStatus("Preparing to proceed");
+
+                        Thread.sleep(1000);
+                        // Start proceed
+
+                        FeedbackLogAnalyzeService service = new FeedbackLogAnalyzeService(logName);
+                        mutex.release();
+                        //Proceeded
+                        result = service.analyze();
+                        result.setLogName(logName);
+                        result.setThread(Thread.currentThread());
+                        result.setStatus("Proceeded");
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    } finally {
+                        semaphore.release();
+                    }
+                }
+
+                if(result.getFeedbacksCount() != 0)
+                {
+                    result.setStatus("Proceeded");
+                    endTime = System.currentTimeMillis();
+                    result.setExecutionTime(endTime - startTime);
+                    results.add(result);
+//                    new DataAnalyzeThread(semaphore, mutex, queue, results).execute();
+                }
+                return result;
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+
+
+    }
+
+    private void updateThreadTable(Thread thread, String status, String logName, String executionTime)
     {
         DefaultTableModel model = (DefaultTableModel) threadsTable.getModel();
         int rows = threadsTable.getRowCount();
@@ -414,25 +536,17 @@ public class BigFilesProcessing {
         {
             model.setValueAt(status, threadRow, 1);
             model.setValueAt(logName, threadRow, 2);
+            model.setValueAt(executionTime, threadRow, 3);
         } else {
             Vector<String> row = new Vector<>();
             row.add(thread.getName().substring(7));
             row.add(status);
             row.add(logName);
+            row.add(executionTime);
 
             model.addRow(row);
         }
 
     }
 
-    private int isAnyFutureGetResult(List<ScheduledFuture<FeedbackLogProcessingResult>> futures)
-    {
-        for (int i = 0; i < futures.size(); i++) {
-            ScheduledFuture<FeedbackLogProcessingResult> future = futures.get(i);
-            if (future.isDone()) {
-                return i;
-            }
-        }
-        return -1;
-    }
 }
