@@ -78,17 +78,23 @@ public class LogsAnalyzeSwingWorker extends SwingWorker<FeedbackLogProcessingRes
                     String logName = queue.poll();
                     result.setLogName(logName);
                     result.setStatus("Preparing to proceed");
+                    publish(result);
 
                     Thread.sleep(1000);
                     // Start proceed
+                    result.setStatus("Proceed started");
+                    publish(result);
 
                     FeedbackLogAnalyzeService service = new FeedbackLogAnalyzeService(logName);
                     mutex.release();
-                    //Proceeded
+                    Thread.sleep(1000);
                     result = service.analyze();
+                    //Proceeded
+
                     result.setLogName(logName);
                     result.setThread(Thread.currentThread());
                     result.setStatus("Proceeded");
+                    publish(result);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 } finally {

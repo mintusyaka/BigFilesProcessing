@@ -115,7 +115,7 @@ public class BigFilesProcessing {
                 DataForLogsProcessing data = new DataForLogsProcessing();
                 data.setData(currentMaxThreadsCountLabel, currentMaxSimulatedThreadsCount, logsProcessingProgressTable);
 
-                Callable<FeedbackLogProcessingResult> analyzeFilesTask = () -> {
+                /*Callable<FeedbackLogProcessingResult> analyzeFilesTask = () -> {
                     try {
                         long startTime = System.currentTimeMillis();
                         data.getSemaphore().acquire();
@@ -165,19 +165,29 @@ public class BigFilesProcessing {
                     } catch (InterruptedException ex) {
                         throw new RuntimeException(ex);
                     }
-                };
+                };*/
 
-                /*List<SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult>> workers = new ArrayList<>();
+                List<SwingWorker<FeedbackLogProcessingResult, FeedbackLogProcessingResult>> workers = new ArrayList<>();
 
                 for (int i = 0; i < data.getFileCount(); ++i) {
                     workers.add(new LogsAnalyzeSwingWorker(data.getSemaphore(), data.getMutex(), data.getQueue(), data.getResults(), threadsTable));
                     data.getScheduler().schedule(workers.get(i), 10, TimeUnit.MILLISECONDS);
                 }
 
-                new SwingWorkersDataGetterThread(workers, data.getResults()).start();*/
+                SwingWorkersDataGetterThread getter =
+                        new SwingWorkersDataGetterThread(
+                                workers,
+                                data.getResults(),
+                                data,
+                                totalProcessedFeedbacksCountLabel,
+                                genderLabel,
+                                mostFrequentlyUsedWordLabel,
+                                goodPercentageLabel,
+                                badPercentageLabel
+                        );
+                getter.start();
 
-
-                List<ScheduledFuture<FeedbackLogProcessingResult>> futures = new ArrayList<>();
+                /*List<ScheduledFuture<FeedbackLogProcessingResult>> futures = new ArrayList<>();
 
                 for (int i = 0; i < data.getFileCount(); ++i) {
                     futures.add(data.getScheduler().schedule(analyzeFilesTask, 10, TimeUnit.MILLISECONDS));
@@ -237,7 +247,7 @@ public class BigFilesProcessing {
                 }
                 System.out.println("Total execution time: " + totalTime + " ms");
                 System.out.println("Execution time: " + (endTime - startTime) + " ms");
-
+*/
             }
 
             private void clearThreadTable() {
