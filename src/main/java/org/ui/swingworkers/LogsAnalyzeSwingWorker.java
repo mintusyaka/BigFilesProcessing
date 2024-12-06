@@ -87,7 +87,7 @@ public class LogsAnalyzeSwingWorker extends SwingWorker<FeedbackLogProcessingRes
 
                     FeedbackLogAnalyzeService service = new FeedbackLogAnalyzeService(logName);
                     mutex.release();
-                    Thread.sleep(1000);
+                    Thread.sleep(5000);
                     result = service.analyze();
                     //Proceeded
 

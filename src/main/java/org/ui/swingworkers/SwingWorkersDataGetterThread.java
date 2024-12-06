@@ -2,6 +2,7 @@ package org.ui.swingworkers;
 
 import org.entity.FeedbackLogProcessingResult;
 import org.ui.entity.DataForLogsProcessing;
+import org.ui.tools.ToolsForUI;
 
 import javax.swing.*;
 import java.util.List;
@@ -68,20 +69,21 @@ public class SwingWorkersDataGetterThread extends Thread {
         {
             System.out.println(i + ". " + results.get(i));
         }
-        System.out.println("Total execution time: " + totalTime);
+        System.out.println("Total execution time (sum of all threads): " + totalTime);
 
-        getFinalResult();
+        ToolsForUI.getFinalResult(
+                data,
+                goodPercentage,
+                badPercentage,
+                workers,
+                totalProcessedFeedbacksCountLabel,
+                genderLabel,
+                mostFrequentlyUsedWordLabel,
+                goodPercentageLabel,
+                badPercentageLabel
+        );
 
-    }
+        data.getScheduler().shutdown();
 
-    public void getFinalResult() {
-        data.getFinalResult().setPercentageOfGoodFeedbacks((int)(goodPercentage * 1.0 / workers.size()));
-        data.getFinalResult().setPercentageOfBadFeedbacks((int)(badPercentage * 1.0 / workers.size()));
-
-        totalProcessedFeedbacksCountLabel.setText(data.getFinalResult().getFeedbacksCount() + "");
-        genderLabel.setText(data.getFinalResult().getMostFrequentlyUsedWord());
-        mostFrequentlyUsedWordLabel.setText(data.getFinalResult().getMostFrequentlyUsedWord());
-        goodPercentageLabel.setText(data.getFinalResult().getPercentageOfGoodFeedbacks() + "%");
-        badPercentageLabel.setText(data.getFinalResult().getPercentageOfBadFeedbacks() + "%");
     }
 }
